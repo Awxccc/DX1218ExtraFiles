@@ -13,10 +13,10 @@ TagManager:
   - UI
   - Weapon
   - Item
-  - 
-  - 
-  - 
-  - 
+  - Enemy
+  - Object
+  - Player
+  - Missile
   - 
   - 
   - 

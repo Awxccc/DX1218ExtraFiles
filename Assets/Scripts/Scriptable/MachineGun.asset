@@ -16,7 +16,7 @@ MonoBehaviour:
   damage: 10
   range: 100
   fireRate: 0.1
-  maxAmmo: 0
+  maxAmmo: 50
   hitLayers:
     serializedVersion: 2
-    m_Bits: 55
+    m_Bits: 951

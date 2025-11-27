@@ -3,10 +3,11 @@ public class RaycastWeapon : Weapon
 {
     public override void Shoot()
     {
-        if (Time.time >= nextFireTime && ammoCount > 0)
+        if (CanShoot())
         {
             nextFireTime = Time.time + weaponData.fireRate;
             PerformRaycast();
+
             ammoCount -= 1;
         }
     }

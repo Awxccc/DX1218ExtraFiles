@@ -13,7 +13,8 @@ public class PlayerController : MonoBehaviour
     private Vector2 currentMouseDelta;
     private Vector2 currentMouseDeltaVelocity;
     public float mouseSmoothTime = 0.03f;
-    public float mouseSensitivity = 10.0f;
+    public float mouseSensitivity = 20.0f;
+    private float inputLagTimer = 0.2f;
 
     public float cameraPitch = 0f;
 
@@ -76,10 +77,21 @@ public class PlayerController : MonoBehaviour
     [Header("Sliding")]
     private bool isSliding = false;
     private bool isCrouching = false;
-    private float slideSpeed = 15f;
-    private float slideDuration = 0.5f;
-    private float slideTimer = 0f;
+
+    // Configuration
+    [SerializeField] private float slideStartSpeed = 15f; // Speed when slide begins
+    [SerializeField] private float slideEndSpeed = 0f;    // Speed at which slide stops
+    [SerializeField] private float slideFriction = 20f;   // How fast you slow down on flat ground
+    [SerializeField] private float slopeGravity = 0.1f;    // How fast you accelerate on slopes
+
+    // Internal
+    private float slideSpeed;
     private Vector3 slideDirection;
+    private RaycastHit slopeHit;
+
+    [Header("Pause")]
+    private InputAction pauseAction;
+    private bool isPaused = false;
 
     public void InvokeAmmoCountChanged()
     {
@@ -101,6 +113,7 @@ public class PlayerController : MonoBehaviour
         pickUpAction = playerInput.actions["PickUp"];
         switchWeaponAction = playerInput.actions["SwitchWeapon"];
         reloadAction = playerInput.actions["Reload"];
+        pauseAction = playerInput.actions["Pause"];
     }
     private void Start()
     {
@@ -110,9 +123,22 @@ public class PlayerController : MonoBehaviour
         currentFOV = normalFOV = Camera.main.fieldOfView;
         sprintFOV = normalFOV * sprintFOVMultiplier;
         InvokeAmmoCountChanged();
+        LockCursor();
     }
     void Update()
     {
+        if (inputLagTimer > 0)
+        {
+            inputLagTimer -= Time.deltaTime;
+            return;
+        }
+
+        if (Keyboard.current.escapeKey.wasPressedThisFrame)
+        {
+            TogglePause();
+        }
+
+        if (isPaused) return;
 
         Vector2 input = moveAction.ReadValue<Vector2>();
         move = transform.right * input.x + transform.forward * input.y;
@@ -144,6 +170,7 @@ public class PlayerController : MonoBehaviour
         else
         {
             characterController.Move(slideSpeed * Time.deltaTime * slideDirection);
+            characterController.Move(Vector3.down * 5f * Time.deltaTime);
         }
         //Jump
         if (characterController.isGrounded && jumpVelocity.y < 0)
@@ -213,7 +240,7 @@ public class PlayerController : MonoBehaviour
     {
         float mouseY = mouseDelta.y * mouseSensitivity * Time.deltaTime;
 
-        float recoilPitchOffset = currentRecoil * recoilAmount;
+        float recoilPitchOffset = currentRecoil * recoilAmount * Time.deltaTime * 60f;
         cameraPitch -= mouseY + recoilPitchOffset;
 
         currentRecoil = Mathf.Lerp(currentRecoil, 0f, Time.deltaTime * recoverSpeed);
@@ -222,6 +249,11 @@ public class PlayerController : MonoBehaviour
     }
     void HandleCameraShake()
     {
+        if (Time.timeScale == 0)
+        {
+            shakeOffset = Vector3.zero;
+            return;
+        }
         if (shakeTimeRemaining > 0)
         {
             shakeOffset = Random.insideUnitSphere * shakeMagnitude;
@@ -229,12 +261,13 @@ public class PlayerController : MonoBehaviour
         }
         else
         {
-            // Ensure we don't accumulate small positional errors over time
             shakeOffset = Vector3.zero;
         }
     }
     public void Look()
     {
+        if (isPaused || inputLagTimer > 0) return;
+
         mouseDelta = lookAction.ReadValue<Vector2>();
         currentMouseDelta = Vector2.SmoothDamp(currentMouseDelta, mouseDelta, ref
         currentMouseDeltaVelocity, mouseSmoothTime);
@@ -309,35 +342,80 @@ public class PlayerController : MonoBehaviour
             currentWeaponIndex %= weapons.Length;
             currentWeapon = weapons[currentWeaponIndex];
             currentWeapon.gameObject.SetActive(true);
+            InvokeAmmoCountChanged();
         }
     }
-
+    private bool OnSlope()
+    {
+        // Cast a ray down to check the ground normal
+        if (Physics.Raycast(transform.position, Vector3.down, out slopeHit, 2f))
+        {
+            float angle = Vector3.Angle(Vector3.up, slopeHit.normal);
+            // Returns true if angle is typical for a slope (e.g., between 5 and 50 degrees)
+            return angle > 5f && angle < 50f;
+        }
+        return false;
+    }
     private void Sliding()
     {
+        // 1. START SLIDING
+        // We only start if sprinting, pressing crouch, and on the ground
         if (runAction.IsPressed() && crouchAction.WasPressedThisFrame() && !isSliding && characterController.isGrounded)
         {
             isSliding = true;
-            slideTimer = slideDuration;
+
+            // Set initial direction to where we are moving
             slideDirection = move.normalized;
 
-            if (speed > moveSpeed * sprintSpeedMultiplier * 0.9f)
-            {
-                jumpVelocity.y += 1f;
-            }
-            Debug.Log("Sliding");
+            // Ensure we start with a speed boost (or keep sprint speed)
+            slideSpeed = slideStartSpeed;
+
+            // Shrink the character
             characterController.height = 0.5f;
             characterController.center = new Vector3(0, 0.5f / 2, 0);
         }
 
+        // 2. WHILE SLIDING
         if (isSliding)
         {
-            slideTimer -= Time.deltaTime;
+            if (OnSlope())
+            {
+                // --- ON SLOPE LOGIC ---
+                // 1. Find the "Downhill" direction
+                Vector3 slopeDir = Vector3.ProjectOnPlane(Vector3.down, slopeHit.normal).normalized;
 
-            slideSpeed = Mathf.Lerp(slideSpeed, moveSpeed * walkSpeedMultiplier, Time.deltaTime * 3f);
+                // 2. Add Gravity to speed (Accelerate)
+                slideSpeed += slopeGravity * Time.deltaTime;
 
-            if (slideTimer <= 0 || !crouchAction.IsPressed())
+                // 3. Adjust Direction: Blend purely forward movement into downhill movement
+                // This gives you control but pulls you down the slope
+                slideDirection = Vector3.Lerp(slideDirection, slopeDir, Time.deltaTime * 5f);
+            }
+            else
+            {
+                // --- FLAT GROUND LOGIC ---
+                // Apply Friction (Decelerate)
+                slideSpeed -= slideFriction * Time.deltaTime;
+
+                // Stop Sliding if we are too slow
+                if (slideSpeed <= slideEndSpeed)
+                {
+                    isSliding = false;
+                }
+            }
+
+            // 3. CANCEL CONDITIONS
+            // Stop if we let go of crouch
+            if (!crouchAction.IsPressed())
             {
                 isSliding = false;
+            }
+
+            // 4. RESET WHEN STOPPING
+            if (!isSliding)
+            {
+                characterController.height = 1.0f;
+                characterController.center = Vector3.zero;
             }
         }
     }
@@ -354,5 +432,41 @@ public class PlayerController : MonoBehaviour
         {
             currentWeapon.Reload();
         }
+    }
+    private void TogglePause()
+    {
+        isPaused = !isPaused;
+
+        if (isPaused)
+        {
+            Time.timeScale = 0f;
+            UnlockCursor();
+        }
+        else
+        {
+            Time.timeScale = 1f;
+            LockCursor();
+            mouseDelta = Vector2.zero;
+            currentMouseDelta = Vector2.zero;
+        }
+    }
+    private void OnApplicationFocus(bool hasFocus)
+    {
+        if (hasFocus && !isPaused)
+        {
+            LockCursor();
+        }
+    }
+
+    private void LockCursor()
+    {
+        Cursor.visible = false;
+        Cursor.lockState = CursorLockMode.Locked;
+    }
+
+    private void UnlockCursor()
+    {
+        Cursor.visible = true;
+        Cursor.lockState = CursorLockMode.None;
     }
 }

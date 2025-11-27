@@ -23,6 +23,7 @@ public class UIManager : MonoBehaviour
 
     private void UpdateReloadIndicator(bool isReloading)
     {
+        reloadIndicatorText.gameObject.SetActive(isReloading);
         reloadIndicatorText.text = isReloading ? "RELOADING..." : "";
     }
 }

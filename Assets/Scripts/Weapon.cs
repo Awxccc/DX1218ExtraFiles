@@ -1,14 +1,6 @@
 using UnityEngine;
 public abstract class Weapon : MonoBehaviour
 {
-    /*
-    public float fireRate = 0.01f;
-    public float damage = 10f;
-    public float range = 100f;
-    public float ammo = 0f;
-    public string weaponName = "Default";
-    public LayerMask hitLayers;
-    */
 
     public Camera playerCamera;
     [SerializeField] private GameObject impactEffect;
@@ -29,6 +21,11 @@ public abstract class Weapon : MonoBehaviour
     // Abstract method for shooting, to be implemented by subclasses
     public abstract void Shoot();
     // Protected method to handle raycast logic, can be used by subclasses
+
+    private void Start()
+    {
+        ammoCount = weaponData.maxAmmo;
+    }
     protected void PerformRaycast()
     {
         Ray ray = playerCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0.0f));
