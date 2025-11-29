@@ -116,8 +116,7 @@ public class MissileLauncher : Weapon
             else
             {
                 missileScript.transform.forward = playerCamera.transform.forward;
-                Rigidbody missileRb = missileScript.GetComponent<Rigidbody>();
-                if (missileRb != null)
+                if (missileScript.TryGetComponent<Rigidbody>(out var missileRb))
                 {
                     missileRb.AddForce(playerCamera.transform.forward * launchForce, ForceMode.VelocityChange);
                 }

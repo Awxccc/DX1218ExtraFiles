@@ -55,6 +55,13 @@ public class Damageable : MonoBehaviour
     public void Destroy()
     {
         Debug.Log(gameObject.name + " has died.");
-        Destroy(gameObject);
+        if (TryGetComponent(out ExplosiveObject obj))
+        {
+            obj.Detonate();
+        }
+        if (gameObject != null)
+        {
+            Destroy(gameObject);
+        }
     }
 }

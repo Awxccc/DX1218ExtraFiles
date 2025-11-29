@@ -20,3 +20,7 @@ MonoBehaviour:
   hitLayers:
     serializedVersion: 2
     m_Bits: 951
+  weaponSlotIndex: 0
+  weaponPrefab: {fileID: 7018502736685970676, guid: 135319814c7b57e43aa5d3479ada57d1, type: 3}
+  pickupPrefab: {fileID: 6984035244778875268, guid: 6d85dd54f2a293746b5d1b8973c91ed9, type: 3}
+  weaponIcon: {fileID: 0}

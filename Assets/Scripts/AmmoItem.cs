@@ -1,5 +1,5 @@
 using UnityEngine;
-public class AmmoItem : MonoBehaviour, Item
+public class AmmoItem : MonoBehaviour, IPickUpItem
 {
     [SerializeField] private int ammoAmount;
     public void Use(PlayerController playerController)

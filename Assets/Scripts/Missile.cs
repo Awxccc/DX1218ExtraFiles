@@ -90,8 +90,7 @@ public class Missile : MonoBehaviour
             Rigidbody rb = hit.GetComponent<Rigidbody>();
             if (rb != null) rb.AddExplosionForce(explosionForce, transform.position, explosionRadius, 1f, ForceMode.Impulse);
 
-            Damageable damageable = hit.GetComponent<Damageable>();
-            if (damageable != null) damageable.TakeDamage(explosionDamage);
+            if (hit.TryGetComponent<Damageable>(out Damageable damageable)) damageable.TakeDamage(explosionDamage);
         }
     }
 

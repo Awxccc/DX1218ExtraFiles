@@ -9,4 +9,10 @@ public class WeaponData : ScriptableObject
     public float fireRate = 0.1f;
     public int maxAmmo = 0;
     public LayerMask hitLayers; // Layers the weapon can hit
+
+    [Header("Weapon Inventory")]
+    public int weaponSlotIndex;
+    public GameObject weaponPrefab;
+    public GameObject pickupPrefab;
+    public Sprite weaponIcon;
 }

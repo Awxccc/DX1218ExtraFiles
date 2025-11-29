@@ -22,6 +22,16 @@ public abstract class Weapon : MonoBehaviour
     public abstract void Shoot();
     // Protected method to handle raycast logic, can be used by subclasses
 
+    [Header("Aim down sight")]
+    public Vector3 aimPosition;
+    public float aimSpeed = 10f;
+    public float adsFov = 40f;
+    [HideInInspector] public Vector3 defaultPosition;
+
+    protected virtual void Awake()
+    {
+        defaultPosition = transform.localPosition;
+    }
     private void Start()
     {
         ammoCount = weaponData.maxAmmo;

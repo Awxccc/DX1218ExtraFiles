@@ -1,6 +1,4 @@
-using UnityEngine;
-
-public interface Item
+public interface IPickUpItem
 {
     public void Use(PlayerController playerController);
 }
