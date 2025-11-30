@@ -20,7 +20,14 @@ MonoBehaviour:
   hitLayers:
     serializedVersion: 2
     m_Bits: 951
-  weaponSlotIndex: 0
-  weaponPrefab: {fileID: 7018502736685970676, guid: 135319814c7b57e43aa5d3479ada57d1, type: 3}
+  weaponSlotIndex: 1
+  weaponPrefab: {fileID: 4525753421580271182, guid: 135319814c7b57e43aa5d3479ada57d1, type: 3}
   pickupPrefab: {fileID: 6984035244778875268, guid: 6d85dd54f2a293746b5d1b8973c91ed9, type: 3}
-  weaponIcon: {fileID: 0}
+  weaponIcon: {fileID: 21300000, guid: cc74a9b877ea6ad4b825b4ffa54804f6, type: 3}
+  recoilAmount: 0.1
+  shakeMagnitude: 0.05
+  shakeDuration: 0.1
+  reloadTime: 1.5
+  shootClip: {fileID: 8300000, guid: a5c68c0b220a8194787aeaea40015203, type: 3}
+  emptyFireSound: {fileID: 8300000, guid: 15c4961fe8def45478bf71ad98a063d4, type: 3}
+  equipClip: {fileID: 8300000, guid: 0c5586d31b28c4642a50eef6027543d0, type: 3}

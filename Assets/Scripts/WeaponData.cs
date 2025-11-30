@@ -15,4 +15,13 @@ public class WeaponData : ScriptableObject
     public GameObject weaponPrefab;
     public GameObject pickupPrefab;
     public Sprite weaponIcon;
+
+    public float recoilAmount = 0.2f;
+    public float shakeMagnitude = 0.05f;
+    public float shakeDuration = 0.2f;
+
+    public float reloadTime = 1.5f;
+    public AudioClip shootClip;
+    public AudioClip emptyFireSound;
+    public AudioClip equipClip;
 }

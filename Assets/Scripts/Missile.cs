@@ -14,6 +14,7 @@ public class Missile : MonoBehaviour
     [SerializeField] private float explosionForce = 1000f;
     [SerializeField] private float explosionDamage = 50f;
     [SerializeField] private GameObject explosionEffect;
+    [SerializeField] private AudioClip explosionClip;
 
     private Rigidbody _rigidbody;
     private float _timeSinceLaunch = 0f;
@@ -82,6 +83,10 @@ public class Missile : MonoBehaviour
 
     private void Explode()
     {
+        if (explosionClip != null)
+        {
+            AudioSource.PlayClipAtPoint(explosionClip, transform.position);
+        }
         if (explosionEffect != null) Instantiate(explosionEffect, transform.position, Quaternion.identity);
 
         Collider[] colliders = Physics.OverlapSphere(transform.position, explosionRadius);

@@ -6,22 +6,24 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private PlayerInput playerInput;
     private CharacterController characterController;
     private Vector3 move;
-    private InputAction moveAction;
 
-    private InputAction lookAction;
-    private Vector2 mouseDelta;
-    private Vector2 currentMouseDelta;
-    private Vector2 currentMouseDeltaVelocity;
+    // Inputs
+    private InputAction moveAction, lookAction, jumpAction, runAction, crouchAction, shootAction, pickUpAction;
+    private InputAction switchWeaponAction;
+    private InputAction reloadAction;
+    private InputAction pauseAction;
+    private InputAction aimAction;
+    private InputAction dropAction;
+
+    [Header("Movement Settings")]
     public float mouseSmoothTime = 0.03f;
     public float mouseSensitivity = 20.0f;
     private float inputLagTimer = 0.2f;
-
     public float cameraPitch = 0f;
-
-    private InputAction jumpAction;
-    private Vector3 jumpVelocity;
     private float gravity = -9.81f;
-    private float jumpHeight = 3.0f;
+    private float jumpHeight = 1.0f;
+    private Vector3 jumpVelocity;
+    [SerializeField] private GameObject speedLineParticles;
 
     [SerializeField] private float moveSpeed;
     [SerializeField] private float walkSpeedMultiplier;
@@ -29,79 +31,86 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float moveSpeedTransition;
     private float speed;
     private float currentSpeedMultiplier;
-    private InputAction runAction;
     private float originalCameraY;
     private float timer;
     private float bobbingOffset;
+    private Vector2 mouseDelta;
+    private Vector2 currentMouseDelta;
+    private Vector2 currentMouseDeltaVelocity;
 
-    private InputAction crouchAction;
-
-    //Shake
-    private InputAction shootAction;
-    private float shakeDuration = 0.5f; // duration of the shake
-    private float shakeMagnitude = 0.05f; // strength of the shake
-    private float shakeTimeRemaining = 0.0f; // time remaining since shake starts
-    private Vector3 originalPosition; // stores original position to return to
+    // Shake
+    private float shakeDuration = 0.5f;
+    private float shakeMagnitude = 0.05f;
+    private float shakeTimeRemaining = 0.0f;
+    private Vector3 originalPosition;
     private Vector3 shakeOffset;
 
-    // Use for change FOV
-    private bool isSprinting; // keeps track if player sprints
-    private float sprintFOVMultiplier = 0.8f; // multiplier for sprinting
-    private float sprintFOV; // stores FOV value when sprinting
-    private float normalFOV; // stores FOV value when walking
-    private float currentFOV; // stores current FOV value
+    // FOV
+    private bool isSprinting;
+    private float sprintFOVMultiplier = 0.8f;
+    private float sprintFOV;
+    private float normalFOV;
+    private float currentFOV;
 
     [Header("Pick Up")]
     [SerializeField] private float pickUpRange;
     [SerializeField] private LayerMask itemLayer;
-    // For item pick up
-    private InputAction pickUpAction;
 
     [Header("Weapon")]
     [HideInInspector] public Weapon currentWeapon;
-    public GameObject currentWeaponModel;
     public WeaponData currentWeaponData;
     public static System.Action<int, int> OnAmmoCountChanged;
-    private InputAction reloadAction;
-    private InputAction aimAction;
-    private InputAction dropAction;
+    public static System.Action<Sprite> OnWeaponChanged;
+    public static System.Action<bool> OnADSChanged;
     public Transform weaponHolder;
     public Transform dropPoint;
+    private bool wasAiming = false;
 
     [Header("Weapon List")]
     [SerializeField] private Weapon[] weapons;
-    // For weapon switching
-    private InputAction switchWeaponAction;
     private int currentWeaponIndex = -1;
 
     // Recoil
     private float recoilAmount = 0.5f;
-    private float recoilSpeed = 8f;
     private float recoverSpeed = 4f;
     private float currentRecoil = 0f;
 
     [Header("Sliding")]
     private bool isSliding = false;
     private bool isCrouching = false;
-
-    // Configuration
-    [SerializeField] private float slideStartSpeed = 15f;
-    [SerializeField] private float slideEndSpeed = 0f;
-    [SerializeField] private float slideFriction = 20f;
-    [SerializeField] private float slopeGravity = 0.1f;
+    [SerializeField] private float slideStartSpeed = 15f, slideEndSpeed = 0f, slideFriction = 20f, slopeGravity = 0.1f;
     private float slideSpeed;
     private Vector3 slideDirection;
     private RaycastHit slopeHit;
 
     [Header("Pause")]
-    private InputAction pauseAction;
     private bool isPaused = false;
+
+    [Header("Audio")]
+    [SerializeField] private AudioSource footstepSource;
+    [SerializeField] private AudioSource sfxSource;
+    [Space]
+    [SerializeField] private AudioClip walkClip;
+    [SerializeField] private AudioClip runClip;
+    [SerializeField] private AudioClip slideClip;
+    [SerializeField] private AudioClip jumpClip;
+    [SerializeField] private AudioClip pickupClip;
+    [SerializeField] private AudioClip dropClip;
+    private AudioClip currentMoveClip;
 
     public void InvokeAmmoCountChanged()
     {
-        OnAmmoCountChanged?.Invoke(currentWeapon.ammoCount,
-        currentWeapon.weaponData.maxAmmo);
+        if (currentWeapon != null)
+        {
+            OnAmmoCountChanged?.Invoke(currentWeapon.ammoCount, currentWeapon.reservedAmmo);
+            OnWeaponChanged?.Invoke(currentWeapon.weaponData.weaponIcon);
+        }
+        else
+        {
+            OnWeaponChanged?.Invoke(null);
+        }
     }
+
     void Awake()
     {
         characterController = GetComponent<CharacterController>();
@@ -117,18 +126,29 @@ public class PlayerController : MonoBehaviour
         pauseAction = playerInput.actions["Pause"];
         aimAction = playerInput.actions["Aim"];
         dropAction = playerInput.actions["Drop"];
-
     }
+
     private void Start()
     {
         originalCameraY = Camera.main.transform.localPosition.y;
-        timer = 0f;
-        bobbingOffset = 0f;
         currentFOV = normalFOV = Camera.main.fieldOfView;
         sprintFOV = normalFOV * sprintFOVMultiplier;
+
+        // Initialize existing weapons
+        for (int i = 0; i < weapons.Length; i++)
+        {
+            if (weapons[i] != null)
+            {
+                weapons[i].gameObject.SetActive(false);
+            }
+        }
+
+        // Select first available weapon
+        SwitchToNextAvailableWeapon(1);
         InvokeAmmoCountChanged();
         LockCursor();
     }
+
     void Update()
     {
         if (inputLagTimer > 0)
@@ -137,15 +157,12 @@ public class PlayerController : MonoBehaviour
             return;
         }
 
-        if (Keyboard.current.escapeKey.wasPressedThisFrame)
-        {
-            TogglePause();
-        }
-
+        if (pauseAction.WasPressedThisFrame()) TogglePause();
         if (isPaused) return;
 
         Vector2 input = moveAction.ReadValue<Vector2>();
         move = transform.right * input.x + transform.forward * input.y;
+
         Look();
         Jump();
         Crouch();
@@ -154,17 +171,21 @@ public class PlayerController : MonoBehaviour
         SwitchWeapon();
         Sliding();
         HandleReload();
-        //Slide
+        HandleMovementAudio(input);
+
+        // Movement Logic
         if (!isSliding)
         {
             if (runAction.IsPressed())
             {
                 currentSpeedMultiplier = sprintSpeedMultiplier;
+                if (speedLineParticles) speedLineParticles.SetActive(true);
                 isSprinting = input.y > 0;
             }
             else
             {
                 currentSpeedMultiplier = walkSpeedMultiplier;
+                if (speedLineParticles) speedLineParticles.SetActive(false);
                 isSprinting = false;
             }
 
@@ -176,26 +197,9 @@ public class PlayerController : MonoBehaviour
             characterController.Move(slideSpeed * Time.deltaTime * slideDirection);
             characterController.Move(5f * Time.deltaTime * Vector3.down);
         }
-        //Jump
-        if (characterController.isGrounded && jumpVelocity.y < 0)
-        {
-            jumpVelocity.y = -2f;
-        }
-        jumpVelocity.y += gravity * Time.deltaTime;
-        //Run
-        if (runAction.IsPressed())
-        {
-            currentSpeedMultiplier = sprintSpeedMultiplier;
-            isSprinting = input.y > 0;
-        }
-        else
-        {
-            currentSpeedMultiplier = walkSpeedMultiplier;
-            isSprinting = false;
-        }
-        speed = Mathf.Lerp(speed, moveSpeed * currentSpeedMultiplier, moveSpeedTransition * Time.deltaTime);
-        characterController.Move((jumpVelocity + move * speed) * Time.deltaTime);
 
+        if (characterController.isGrounded && jumpVelocity.y < 0) jumpVelocity.y = -2f;
+        jumpVelocity.y += gravity * Time.deltaTime;
     }
 
     private void LateUpdate()
@@ -208,192 +212,18 @@ public class PlayerController : MonoBehaviour
         HandleADS();
         HandleWeaponDrop();
     }
-    private void HandleCameraFOV()
-    {
-        if (isSprinting)
-        {
-            currentFOV = Mathf.Lerp(currentFOV, sprintFOV,
-            moveSpeedTransition * Time.deltaTime);
-        }
-        else
-        {
-            currentFOV = Mathf.Lerp(currentFOV, normalFOV,
-            moveSpeedTransition * Time.deltaTime);
-        }
-        Camera.main.fieldOfView = currentFOV;
-    }
-    private void HandleCameraBob()
-    {
-        if (!characterController.isGrounded) return;
-        Transform cameraTransform = Camera.main.transform;
-        bool isMoving = move.magnitude > 0;
-        if (isMoving)
-        {
-            // Increment the bobbing timer as player is moving
-            timer += Time.deltaTime * 3f * currentSpeedMultiplier;
-            // Calculate the new Y position for camera bobbing using a sine wave
-            bobbingOffset = Mathf.Sin(timer) * 0.03f;
-        }
-        else
-        {
-            bobbingOffset = Mathf.Lerp(bobbingOffset, 0, Time.deltaTime);
-        }
-        // Add the originalCameraY with the bobbingOffset value as new Y position value
-        //cameraTransform.localPosition = new Vector3(cameraTransform.localPosition.x,originalCameraY + bobbingOffset,cameraTransform.localPosition.z);
-    }
 
-    private void HandleCameraPitch()
-    {
-        float mouseY = mouseDelta.y * mouseSensitivity * Time.deltaTime;
+    // --- FIXES IN THIS SECTION ---
 
-        float recoilPitchOffset = currentRecoil * recoilAmount * Time.deltaTime * 60f;
-        cameraPitch -= mouseY + recoilPitchOffset;
-
-        currentRecoil = Mathf.Lerp(currentRecoil, 0f, Time.deltaTime * recoverSpeed);
-        cameraPitch = Mathf.Clamp(cameraPitch, -90f, 90);
-        Camera.main.transform.localRotation = Quaternion.Euler(cameraPitch, 0, 0);
-    }
-    void HandleCameraShake()
-    {
-        if (Time.timeScale == 0)
-        {
-            shakeOffset = Vector3.zero;
-            return;
-        }
-        if (shakeTimeRemaining > 0)
-        {
-            shakeOffset = Random.insideUnitSphere * shakeMagnitude;
-            shakeTimeRemaining -= Time.deltaTime;
-        }
-        else
-        {
-            shakeOffset = Vector3.zero;
-        }
-    }
-    public void Look()
-    {
-        if (isPaused || inputLagTimer > 0) return;
-
-        mouseDelta = lookAction.ReadValue<Vector2>();
-        currentMouseDelta = Vector2.SmoothDamp(currentMouseDelta, mouseDelta, ref
-        currentMouseDeltaVelocity, mouseSmoothTime);
-        // Rotate the camera vertically and the player horizontally
-        transform.Rotate(1.0f * currentMouseDelta.x * Vector3.up);
-    }
     public void Jump()
     {
+        // FIX: Added Brackets so sound doesn't play every frame
         if (jumpAction.IsPressed() && characterController.isGrounded)
         {
             jumpVelocity.y = Mathf.Sqrt(jumpHeight * -2f * gravity);
-        }
-    }
-    private void Crouch()
-    {
-        if (isSliding) return;
 
-        if (crouchAction.IsPressed())
-        {
-            isCrouching = true;
-            characterController.height = 0.5f;
-            characterController.center = new Vector3(0, 0.5f / 2, 0);
-        }
-        else
-        {
-            isCrouching = false;
-            characterController.height = 1.0f;
-            characterController.center = new Vector3(0, 0, 0);
-        }
-    }
-    public void Shoot()
-    {
-        if (shootAction.IsPressed())
-        {
-            if (currentWeapon.CanShoot())
-            {
-                ApplyRecoil(0.2f);
-                shakeTimeRemaining = shakeDuration;
-                shakeMagnitude = 0.05f;
-            }
-
-            // Update the code to shoot
-            currentWeapon.Shoot();
-            InvokeAmmoCountChanged();
-        }
-    }
-    private void PickUp()
-    {
-        if (pickUpAction.IsPressed())
-        {
-            Ray ray = Camera.main.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0.0f));
-            if (Physics.Raycast(ray, out RaycastHit hit, pickUpRange, itemLayer))
-            {
-                if (hit.collider.TryGetComponent<IPickUpItem>(out IPickUpItem pickup))
-                {
-                    pickup.Use(this);
-                    Destroy(hit.collider.gameObject);
-                }
-            }
-        }
-    }
-    public void PickUpWeapon(WeaponData newWeaponData)
-    {
-        if (pickUpAction.IsPressed())
-        {
-            if (newWeaponData == null)
-            {
-                Debug.LogWarning("Tried to pick up a NULL WeaponData.");
-                return;
-            }
-
-            int slot = Mathf.Clamp(newWeaponData.weaponSlotIndex, 0, weapons.Length - 1);
-
-            // Destroy previously equipped weapon model (visual)
-            if (currentWeaponModel != null)
-            {
-                Destroy(currentWeaponModel);
-                currentWeaponModel = null;
-            }
-
-            // If slot already has a weapon, remove it
-            if (weapons[slot] != null)
-            {
-                Destroy(weapons[slot].gameObject);
-                weapons[slot] = null;
-            }
-
-            // Validate prefab
-            if (newWeaponData.weaponPrefab == null)
-            {
-                Debug.LogError($"WeaponData '{newWeaponData.weaponName}' has NO weaponPrefab assigned!");
-                return;
-            }
-
-            // Create new weapon model in player hands
-            GameObject newModel = Instantiate(newWeaponData.weaponPrefab, weaponHolder);
-            newModel.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
-            if (!newModel.TryGetComponent<Weapon>(out var weaponComponent))
-            {
-                Debug.LogError("weaponPrefab must contain a Weapon component.");
-                Destroy(newModel);
-                return;
-            }
-
-            // Assign runtime values
-            weaponComponent.weaponData = newWeaponData;
-            weaponComponent.ammoCount = newWeaponData.maxAmmo;
-
-            // Update inventory
-            weapons[slot] = weaponComponent;
-
-            // Final equip
-            currentWeaponData = newWeaponData;
-            currentWeaponModel = newModel;
-            currentWeaponIndex = slot;
-            currentWeapon = weapons[slot];
-
-            currentWeapon.gameObject.SetActive(true);
-
-            InvokeAmmoCountChanged();
+            // Play Jump Sound
+            sfxSource.PlayOneShot(jumpClip);
         }
     }
 
@@ -401,194 +231,301 @@ public class PlayerController : MonoBehaviour
     {
         Vector2 scroll = switchWeaponAction.ReadValue<Vector2>();
 
-        if (scroll.y != 0)
+        // FIX: Using the existing method to ensure sound plays
+        if (scroll.y > 0)
         {
-            int direction = scroll.y < 0 ? 1 : -1;
-            int startIndex = currentWeaponIndex;
+            SwitchToNextAvailableWeapon(1);
+        }
+        else if (scroll.y < 0)
+        {
+            SwitchToNextAvailableWeapon(-1);
+        }
+    }
 
-            do
+    private void EquipWeapon(int index, bool playSound = true) // FIX: Added playSound bool
+    {
+        if (index < 0 || index >= weapons.Length || weapons[index] == null) return;
+
+        if (currentWeapon != null) currentWeapon.gameObject.SetActive(false);
+
+        currentWeaponIndex = index;
+        currentWeapon = weapons[index];
+        currentWeaponData = currentWeapon.weaponData;
+
+        currentWeapon.gameObject.SetActive(true);
+
+        // Only play equip sound if requested
+        if (playSound && currentWeaponData != null && currentWeaponData.equipClip != null)
+        {
+            AudioSource.PlayClipAtPoint(currentWeaponData.equipClip, transform.position);
+        }
+
+        InvokeAmmoCountChanged();
+    }
+
+    public void PickUpWeapon(WeaponData newWeaponData)
+    {
+        if (newWeaponData == null) return;
+
+        int slot = Mathf.Clamp(newWeaponData.weaponSlotIndex, 0, weapons.Length - 1);
+
+        if (weapons[slot] != null) DropWeapon(slot);
+
+        if (newWeaponData.weaponPrefab == null) return;
+
+        GameObject newModel = Instantiate(newWeaponData.weaponPrefab, weaponHolder);
+        newModel.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
+
+        if (!newModel.TryGetComponent<Weapon>(out var weaponComponent))
+        {
+            Destroy(newModel);
+            return;
+        }
+
+        weaponComponent.playerCamera = Camera.main;
+        weaponComponent.weaponData = newWeaponData;
+        weaponComponent.ammoCount = newWeaponData.maxAmmo;
+        weaponComponent.reservedAmmo = newWeaponData.maxAmmo * 2;
+
+        weapons[slot] = weaponComponent;
+
+        // FIX: Pass 'false' here so we don't hear the "Switch" sound on top of the "Pickup" sound
+        EquipWeapon(slot, false);
+
+        // Play Pickup Sound
+        if (sfxSource != null && pickupClip != null) sfxSource.PlayOneShot(pickupClip);
+    }
+
+    private void DropWeapon(int slotIndex)
+    {
+        if (slotIndex < 0 || slotIndex >= weapons.Length || weapons[slotIndex] == null) return;
+        Weapon weaponToDrop = weapons[slotIndex];
+
+        if (weaponToDrop.weaponData.pickupPrefab != null)
+            Instantiate(weaponToDrop.weaponData.pickupPrefab, dropPoint.position, dropPoint.rotation);
+
+        Destroy(weaponToDrop.gameObject);
+        weapons[slotIndex] = null;
+
+        if (currentWeaponIndex == slotIndex)
+        {
+            currentWeapon = null;
+            currentWeaponData = null;
+            currentWeaponIndex = -1;
+
+            // Switch to next weapon (Sound will play here, which is natural for dropping)
+            SwitchToNextAvailableWeapon();
+        }
+        InvokeAmmoCountChanged();
+    }
+
+    // --- Helper Methods ---
+
+    private void SwitchToNextAvailableWeapon(int direction = 1)
+    {
+        int newIndex = currentWeaponIndex;
+        int attempts = 0;
+
+        while (attempts < weapons.Length)
+        {
+            newIndex += direction;
+            if (newIndex >= weapons.Length) newIndex = 0;
+            if (newIndex < 0) newIndex = weapons.Length - 1;
+
+            if (weapons[newIndex] != null)
             {
-                currentWeaponIndex = (currentWeaponIndex + direction + weapons.Length) % weapons.Length;
+                EquipWeapon(newIndex, true); // True = Play sound
+                return;
+            }
+            attempts++;
+        }
+    }
 
-                if (weapons[currentWeaponIndex] != null)
-                    break;
-
-            } while (currentWeaponIndex != startIndex);
-
-            if (weapons[currentWeaponIndex] != null)
+    public void Shoot()
+    {
+        if (currentWeapon == null) return;
+        if (shootAction.IsPressed())
+        {
+            if (currentWeapon.CanShoot())
             {
-                if (currentWeapon != null)
-                    currentWeapon.gameObject.SetActive(false);
+                ApplyRecoil(currentWeapon.weaponData.recoilAmount);
+                shakeTimeRemaining = currentWeapon.weaponData.shakeDuration;
+                shakeMagnitude = currentWeapon.weaponData.shakeMagnitude;
+            }
+            currentWeapon.Shoot();
+            InvokeAmmoCountChanged();
+        }
+    }
 
-                currentWeapon = weapons[currentWeaponIndex];
-                currentWeapon.gameObject.SetActive(true);
-                InvokeAmmoCountChanged();
+    private void PickUp()
+    {
+        if (pickUpAction.WasPressedThisFrame())
+        {
+            Ray ray = Camera.main.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0.0f));
+            if (Physics.Raycast(ray, out RaycastHit hit, pickUpRange, itemLayer))
+            {
+                if (hit.collider.TryGetComponent<IPickUpItem>(out IPickUpItem pickup))
+                {
+                    pickup.Use(this);
+                    // Do NOT destroy here if the logic inside Use() handles destruction (like WeaponPickup), 
+                    // but for ammo/health items, it's usually fine.
+                    // If you notice errors, check if your items are being destroyed twice.
+                    if (hit.collider != null) Destroy(hit.collider.gameObject);
+
+                    if (sfxSource != null && pickupClip != null) sfxSource.PlayOneShot(pickupClip);
+                }
             }
         }
     }
 
-    private bool OnSlope()
+    private void HandleWeaponDrop()
     {
-        if (Physics.Raycast(transform.position, Vector3.down, out slopeHit, 2.5f))
+        if (dropAction.WasPressedThisFrame())
         {
-            float angle = Vector3.Angle(Vector3.up, slopeHit.normal);
-            return angle > 5f && angle < 50f;
+            DropWeapon(currentWeaponIndex);
+            if (sfxSource != null && dropClip != null) sfxSource.PlayOneShot(dropClip);
         }
-        return false;
-    }
-    private void Sliding()
-    {
-        // Start Slide
-        if (runAction.IsPressed() && crouchAction.WasPressedThisFrame() && !isSliding && characterController.isGrounded)
-        {
-            isSliding = true;
-            slideDirection = move.normalized; // Slide in the direction we are moving
-            slideSpeed = slideStartSpeed;
-
-            // Visual adjustment
-            characterController.height = 0.5f;
-            characterController.center = new Vector3(0, 0.25f, 0);
-        }
-
-        // Process Slide
-        if (isSliding)
-        {
-            if (OnSlope())
-            {
-                // Physics: Gravity pulls you down the slope
-                Vector3 slopeDir = Vector3.ProjectOnPlane(Vector3.down, slopeHit.normal).normalized;
-                slideSpeed += slopeGravity * Time.deltaTime;
-                slideDirection = Vector3.Lerp(slideDirection, slopeDir, Time.deltaTime);
-            }
-            else
-            {
-                // Physics: Friction slows you down
-                slideSpeed -= slideFriction * Time.deltaTime;
-                if (slideSpeed <= slideEndSpeed) isSliding = false;
-            }
-
-            // Cancel Slide if Crouch released or Jump pressed
-            if (!crouchAction.IsPressed() || jumpAction.WasPressedThisFrame()) isSliding = false;
-
-            // Reset Character Height
-            if (!isSliding)
-            {
-                characterController.height = 1.0f;
-                characterController.center = Vector3.zero;
-            }
-        }
-    }
-
-    public void ApplyRecoil(float amount)
-    {
-        currentRecoil += amount;
-        currentRecoil = Mathf.Clamp(currentRecoil, 0f, 1f);
     }
 
     private void HandleReload()
     {
+        if (currentWeapon == null) return;
         if (reloadAction.WasPressedThisFrame())
         {
             currentWeapon.Reload();
         }
     }
-    private void TogglePause()
-    {
-        isPaused = !isPaused;
 
-        if (isPaused)
-        {
-            Time.timeScale = 0f;
-            UnlockCursor();
-        }
-        else
-        {
-            Time.timeScale = 1f;
-            LockCursor();
-            mouseDelta = Vector2.zero;
-            currentMouseDelta = Vector2.zero;
-        }
-    }
-    private void OnApplicationFocus(bool hasFocus)
-    {
-        if (hasFocus && !isPaused)
-        {
-            LockCursor();
-        }
-    }
-
-    private void LockCursor()
-    {
-        Cursor.visible = false;
-        Cursor.lockState = CursorLockMode.Locked;
-    }
-
-    private void UnlockCursor()
-    {
-        Cursor.visible = true;
-        Cursor.lockState = CursorLockMode.None;
-    }
     private void HandleADS()
     {
-
         if (currentWeapon == null) return;
 
-        Vector3 targetWeaponPos;
-        float targetFOV;
-
-        if (aimAction.IsPressed())
+        bool isAiming = aimAction.IsPressed();
+        if (isAiming != wasAiming)
         {
-            targetWeaponPos = currentWeapon.aimPosition;
-            targetFOV = currentWeapon.adsFov;
-        }
-        else
-        {
-            targetWeaponPos = currentWeapon.defaultPosition;
-            targetFOV = normalFOV;
+            wasAiming = isAiming;
+            OnADSChanged?.Invoke(isAiming);
         }
 
-        // 1. Move Weapon (Smoothly)
+        Vector3 targetWeaponPos = isAiming ? currentWeapon.aimPosition : currentWeapon.defaultPosition;
+        float targetFOV = isAiming ? currentWeapon.adsFov : normalFOV;
+
         currentWeapon.transform.localPosition = Vector3.Lerp(currentWeapon.transform.localPosition, targetWeaponPos, Time.deltaTime * currentWeapon.aimSpeed);
-
-        // 2. Zoom Camera (Dynamic FOV)
         currentFOV = Mathf.Lerp(currentFOV, targetFOV, Time.deltaTime * currentWeapon.aimSpeed);
         Camera.main.fieldOfView = currentFOV;
     }
-    private void HandleWeaponDrop()
+
+    // Camera and Movement Helpers
+    private void HandleCameraPitch()
     {
-        if (dropAction.WasPressedThisFrame())
+        float mouseY = mouseDelta.y * mouseSensitivity * Time.deltaTime;
+        float recoilPitchOffset = currentRecoil * recoilAmount * Time.deltaTime * 60f;
+        cameraPitch -= mouseY + recoilPitchOffset;
+        currentRecoil = Mathf.Lerp(currentRecoil, 0f, Time.deltaTime * recoverSpeed);
+        cameraPitch = Mathf.Clamp(cameraPitch, -90f, 90);
+        Camera.main.transform.localRotation = Quaternion.Euler(cameraPitch, 0, 0);
+    }
+    public void ApplyRecoil(float amount)
+    {
+        currentRecoil += amount;
+        currentRecoil = Mathf.Clamp(currentRecoil, 0f, 1f);
+    }
+    void HandleCameraShake()
+    {
+        if (Time.timeScale == 0) { shakeOffset = Vector3.zero; return; }
+        if (shakeTimeRemaining > 0)
         {
-
-
-
-            // Must have a weapon equipped to drop
-            if (currentWeaponModel == null || currentWeaponData == null)
-                return;
-
-            // Spawn dropped/pickup object
-            if (currentWeaponData.pickupPrefab != null)
-            {
-                Instantiate(
-                    currentWeaponData.pickupPrefab,
-                    dropPoint.position,
-                    dropPoint.rotation
-                );
-            }
-            else
-            {
-                Debug.LogWarning($"{currentWeaponData.weaponName} has no pickupPrefab.");
-            }
-
-            // Remove held weapon
-            Destroy(currentWeaponModel);
-            currentWeaponModel = null;
-
-            // Remove from inventory
-            weapons[currentWeaponIndex] = null;
-
-            currentWeapon = null;
-            currentWeaponData = null;
+            shakeOffset = Random.insideUnitSphere * shakeMagnitude;
+            shakeTimeRemaining -= Time.deltaTime;
+        }
+        else shakeOffset = Vector3.zero;
+    }
+    private void HandleCameraBob()
+    {
+        if (!characterController.isGrounded) return;
+        bool isMoving = move.magnitude > 0;
+        if (isMoving)
+        {
+            timer += Time.deltaTime * 3f * currentSpeedMultiplier;
+            bobbingOffset = Mathf.Sin(timer) * 0.03f;
+        }
+        else bobbingOffset = Mathf.Lerp(bobbingOffset, 0, Time.deltaTime);
+    }
+    private void HandleCameraFOV()
+    {
+        if (isSprinting) currentFOV = Mathf.Lerp(currentFOV, sprintFOV, moveSpeedTransition * Time.deltaTime);
+        else if (currentWeapon == null) currentFOV = Mathf.Lerp(currentFOV, normalFOV, moveSpeedTransition * Time.deltaTime);
+        Camera.main.fieldOfView = currentFOV;
+    }
+    public void Look()
+    {
+        if (isPaused || inputLagTimer > 0) return;
+        mouseDelta = lookAction.ReadValue<Vector2>();
+        currentMouseDelta = Vector2.SmoothDamp(currentMouseDelta, mouseDelta, ref currentMouseDeltaVelocity, mouseSmoothTime);
+        transform.Rotate(1.0f * currentMouseDelta.x * Vector3.up);
+    }
+    private void Crouch()
+    {
+        if (isSliding) return;
+        if (crouchAction.IsPressed()) { isCrouching = true; characterController.height = 0.5f; characterController.center = new Vector3(0, 0.5f / 2, 0); }
+        else { isCrouching = false; characterController.height = 1.0f; characterController.center = new Vector3(0, 0, 0); }
+    }
+    private bool OnSlope()
+    {
+        if (Physics.Raycast(transform.position, Vector3.down, out slopeHit, 2.5f)) { float angle = Vector3.Angle(Vector3.up, slopeHit.normal); return angle > 5f && angle < 50f; }
+        return false;
+    }
+    private void Sliding()
+    {
+        if (runAction.IsPressed() && crouchAction.WasPressedThisFrame() && !isSliding && characterController.isGrounded)
+        {
+            isSliding = true; slideDirection = move.normalized; slideSpeed = slideStartSpeed;
+            characterController.height = 0.5f; characterController.center = new Vector3(0, 0.25f, 0);
+        }
+        if (isSliding)
+        {
+            if (OnSlope()) { Vector3 slopeDir = Vector3.ProjectOnPlane(Vector3.down, slopeHit.normal).normalized; slideSpeed += slopeGravity * Time.deltaTime; slideDirection = Vector3.Lerp(slideDirection, slopeDir, Time.deltaTime); }
+            else { slideSpeed -= slideFriction * Time.deltaTime; if (slideSpeed <= slideEndSpeed) isSliding = false; }
+            if (!crouchAction.IsPressed() || jumpAction.WasPressedThisFrame()) isSliding = false;
+            if (!isSliding) { characterController.height = 1.0f; characterController.center = Vector3.zero; }
         }
     }
+    private void TogglePause()
+    {
+        isPaused = !isPaused;
+        if (isPaused) { Time.timeScale = 0f; UnlockCursor(); }
+        else { Time.timeScale = 1f; LockCursor(); mouseDelta = Vector2.zero; currentMouseDelta = Vector2.zero; }
+    }
+    private void OnApplicationFocus(bool hasFocus) { if (hasFocus && !isPaused) LockCursor(); }
+    private void LockCursor() { Cursor.visible = false; Cursor.lockState = CursorLockMode.Locked; }
+    private void UnlockCursor() { Cursor.visible = true; Cursor.lockState = CursorLockMode.None; }
 
+    private void HandleMovementAudio(Vector2 input)
+    {
+        if (footstepSource == null) return;
+
+        AudioClip targetClip = null;
+
+        if (characterController.isGrounded)
+        {
+            if (isSliding) targetClip = slideClip;
+            else if (input.magnitude > 0) targetClip = isSprinting ? runClip : walkClip;
+        }
+
+        if (targetClip == null)
+        {
+            if (footstepSource.isPlaying) footstepSource.Stop();
+            currentMoveClip = null;
+        }
+        else
+        {
+            if (currentMoveClip != targetClip || !footstepSource.isPlaying)
+            {
+                footstepSource.clip = targetClip;
+                footstepSource.loop = true;
+                footstepSource.Play();
+                currentMoveClip = targetClip;
+            }
+        }
+    }
 }
