@@ -12,22 +12,22 @@ public class ThrowableWeapon : Weapon
     {
         if (CanShoot())
         {
-            // 1. Cooldown & Ammo
             nextFireTime = Time.time + weaponData.fireRate;
             ammoCount--;
 
-            // 2. Instantiate Projectile
-            // If throwPoint is null, use the weapon's transform
+            // ADD THIS: Play throw sound
+            if (weaponData != null && weaponData.shootClip != null)
+            {
+                AudioSource.PlayClipAtPoint(weaponData.shootClip, transform.position);
+            }
+
             Vector3 spawnPos = throwPoint != null ? throwPoint.position : transform.position;
             GameObject projectile = Instantiate(projectilePrefab, spawnPos, playerCamera.transform.rotation);
 
-            // 3. Add Force (Physics Throw)
             Rigidbody rb = projectile.GetComponent<Rigidbody>();
             if (rb != null)
             {
-                // Calculate force direction (Forward + slightly Up)
                 Vector3 forceDirection = playerCamera.transform.forward * throwForce + transform.up * throwUpwardForce;
-
                 rb.AddForce(forceDirection, ForceMode.VelocityChange);
             }
         }

@@ -31,3 +31,4 @@ MonoBehaviour:
   shootClip: {fileID: 8300000, guid: a5c68c0b220a8194787aeaea40015203, type: 3}
   emptyFireSound: {fileID: 8300000, guid: 15c4961fe8def45478bf71ad98a063d4, type: 3}
   equipClip: {fileID: 8300000, guid: 0c5586d31b28c4642a50eef6027543d0, type: 3}
+  reloadClip: {fileID: 8300000, guid: 274d179857aaec949bb8484b24760f41, type: 3}

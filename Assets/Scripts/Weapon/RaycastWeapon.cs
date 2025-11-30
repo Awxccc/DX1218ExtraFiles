@@ -2,6 +2,8 @@ using UnityEngine;
 public class RaycastWeapon : Weapon
 {
     [SerializeField] private ParticleSystem muzzleFlash;
+    // In RaycastWeapon.cs
+
     public override void Shoot()
     {
         if (CanShoot())
@@ -10,6 +12,12 @@ public class RaycastWeapon : Weapon
             {
                 muzzleFlash.Play();
             }
+
+            if (weaponData != null && weaponData.shootClip != null)
+            {
+                AudioSource.PlayClipAtPoint(weaponData.shootClip, transform.position);
+            }
+
             nextFireTime = Time.time + weaponData.fireRate;
             PerformRaycast();
 

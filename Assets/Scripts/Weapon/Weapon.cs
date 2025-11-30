@@ -5,7 +5,7 @@ public abstract class Weapon : MonoBehaviour
     public Camera playerCamera;
     [SerializeField] private GameObject impactEffect;
     [SerializeField] private AudioClip impactClip;
-    [SerializeField] private AudioSource impactAudio;
+    [SerializeField] private AudioSource impactAudio; // Optional specific source
 
     public WeaponData weaponData;
     protected float nextFireTime = 0f;
@@ -14,16 +14,20 @@ public abstract class Weapon : MonoBehaviour
 
     // Reload
     public bool isReloading = false;
+    public bool isAiming = false;
     protected float nextEmptySoundTime = 0f;
-    public abstract bool CanShoot();
+
+    // Events
     public static System.Action<bool> OnReloadStateChanged;
-    public abstract void Shoot();
 
     [Header("Aim down sight")]
     public Vector3 aimPosition;
     public float aimSpeed = 10f;
     public float adsFov = 40f;
     [HideInInspector] public Vector3 defaultPosition;
+    private float defaultFov;
+    public abstract bool CanShoot();
+    public abstract void Shoot();
 
     protected virtual void Awake()
     {
@@ -34,18 +38,47 @@ public abstract class Weapon : MonoBehaviour
             reservedAmmo = weaponData.maxAmmo * 4;
         }
     }
+    protected virtual void Start()
+    {
+        if (playerCamera != null) defaultFov = playerCamera.fieldOfView;
 
+        // Force reset position immediately on start to prevent glitching
+        transform.localPosition = defaultPosition;
+    }
+    protected virtual void Update()
+    {
+        // Smooth ADS Logic
+        HandleADS();
+    }
+    private void HandleADS()
+    {
+        // 1. Determine Target Position
+        Vector3 targetPos = isAiming ? aimPosition : defaultPosition;
+
+        // 2. Smoothly Move Weapon
+        transform.localPosition = Vector3.Lerp(transform.localPosition, targetPos, Time.deltaTime * aimSpeed);
+
+        // 3. Smoothly Change FOV
+        if (playerCamera != null)
+        {
+            float targetFov = isAiming ? adsFov : defaultFov;
+            playerCamera.fieldOfView = Mathf.Lerp(playerCamera.fieldOfView, targetFov, Time.deltaTime * aimSpeed);
+        }
+    }
     protected void PerformRaycast()
     {
-        if (playerCamera == null)
-        {
-            return;
-        }
+        if (playerCamera == null) return;
+
+        // --- FIX: Use weapon range from data ---
         Ray ray = playerCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0.0f));
         if (Physics.Raycast(ray, out RaycastHit hit, weaponData.range, weaponData.hitLayers))
         {
-            Instantiate(impactEffect, hit.point, Quaternion.LookRotation(hit.normal));
-            if (impactClip != null) AudioSource.PlayClipAtPoint(impactClip, hit.point);
+            if (impactEffect != null)
+                Instantiate(impactEffect, hit.point, Quaternion.LookRotation(hit.normal));
+
+            if (impactClip != null)
+                AudioSource.PlayClipAtPoint(impactClip, hit.point);
+
             if (hit.collider.gameObject.TryGetComponent(out Damageable damageable))
             {
                 damageable.TakeDamage(weaponData.damage);
@@ -55,10 +88,12 @@ public abstract class Weapon : MonoBehaviour
 
     public void Reload()
     {
-        // Check if already reloading, full clip, or NO RESERVES
         if (isReloading || ammoCount == weaponData.maxAmmo || reservedAmmo <= 0) return;
-        if (impactAudio != null)
-            impactAudio.Play();
+
+        // Play sound
+        if (weaponData.reloadClip != null)
+            AudioSource.PlayClipAtPoint(weaponData.reloadClip, transform.position);
+
         isReloading = true;
         OnReloadStateChanged?.Invoke(true);
 
@@ -67,10 +102,7 @@ public abstract class Weapon : MonoBehaviour
 
     protected void FinishReloading()
     {
-        // Calculate how much we need
         int ammoNeeded = weaponData.maxAmmo - ammoCount;
-
-        // Take what is available from reserves
         int ammoToLoad = Mathf.Min(ammoNeeded, reservedAmmo);
 
         reservedAmmo -= ammoToLoad;
@@ -79,12 +111,8 @@ public abstract class Weapon : MonoBehaviour
         isReloading = false;
         OnReloadStateChanged?.Invoke(false);
 
-        // Update UI
-        PlayerController playerController = Object.FindAnyObjectByType<PlayerController>();
-        if (playerController != null)
-        {
-            playerController.InvokeAmmoCountChanged();
-        }
+        // --- FIX: Call Static Event directly instead of PlayerController instance ---
+        PlayerController.OnAmmoCountChanged?.Invoke(ammoCount, reservedAmmo);
     }
 
     public void PlayEmptySound()
