@@ -1,67 +1,48 @@
-using System.Collections;
 using UnityEngine;
+using UnityEngine.Events;
 
 public class Damageable : MonoBehaviour
 {
-    private float health = 100f;
-    // For damage effects
+    [SerializeField] private float health = 100f;
+
+    [Header("Events")]
+    public UnityEvent OnTakeDamage;
+    public UnityEvent OnDeath;
+
+    private Renderer objectRenderer;
     private Color originalColor;
     public Color damageColor = Color.red;
-    public float damageEffectDuration = 0.5f;
-    private Renderer objectRenderer;
-    private Coroutine damageCoroutine;
-    private IEnumerator DamageEffect()
-    {
-        // Set to damage color instantly
-        objectRenderer.material.color = damageColor;
-        // Gradually transition back to the original color over time
-        float elapsedTime = 0f;
-        while (elapsedTime < damageEffectDuration)
-        {
-            objectRenderer.material.color = Color.Lerp(damageColor,
-            originalColor, elapsedTime / damageEffectDuration);
-            elapsedTime += Time.deltaTime;
-            yield return null;
-        }
-        // Ensure the final color is reset to the original
-        objectRenderer.material.color = originalColor;
-    }
+
     private void Start()
     {
         objectRenderer = GetComponent<Renderer>();
-        if (objectRenderer != null)
-        {
-            originalColor = objectRenderer.material.color;
-        }
+        if (objectRenderer != null) originalColor = objectRenderer.material.color;
     }
+
     public void TakeDamage(float amount)
     {
         health -= amount;
-        // Trigger color change effect
+        if (DamagePopupManager.Instance != null)
+        {
+            DamagePopupManager.Instance.CreatePopup(transform.position, amount);
+        }
+        OnTakeDamage?.Invoke();
+
         if (objectRenderer != null)
         {
-            // Stop any existing color change effect to avoid stacking
-            if (damageCoroutine != null)
-            {
-                StopCoroutine(damageCoroutine);
-            }
-            damageCoroutine = StartCoroutine(DamageEffect());
+            objectRenderer.material.color = damageColor;
+            Invoke(nameof(ResetColor), 0.1f);
         }
-        if (health < 0)
+
+        if (health <= 0)
         {
-            Destroy();
-        }
-    }
-    public void Destroy()
-    {
-        Debug.Log(gameObject.name + " has died.");
-        if (TryGetComponent(out ExplosiveObject obj))
-        {
-            obj.Detonate();
-        }
-        if (gameObject != null)
-        {
+            OnDeath?.Invoke();
             Destroy(gameObject);
         }
+    }
+
+    private void ResetColor()
+    {
+        if (objectRenderer != null) objectRenderer.material.color = originalColor;
     }
 }

@@ -16,13 +16,16 @@ public class PlayerStats : MonoBehaviour
     private float currentStamina;
     private float lastStaminaUseTime;
 
-    // Events for UI and Audio to listen to
-    public event Action<float> OnHealthChanged; // float is percentage (0 to 1)
+    public bool IsExhausted { get; private set; }
+
+    public event Action<float> OnHealthChanged;
     public event Action<float> OnStaminaChanged;
+    public event Action<bool> OnExhaustionChanged;
     public event Action OnDeath;
 
     public float StaminaPercentage => currentStamina / maxStamina;
-    public bool HasStamina => currentStamina > 0;
+
+    public bool HasStamina => currentStamina > 0 && !IsExhausted;
 
     private void Awake()
     {
@@ -43,17 +46,23 @@ public class PlayerStats : MonoBehaviour
         if (currentHealth <= 0)
         {
             OnDeath?.Invoke();
-            // Handle player death logic here (e.g., disable input)
         }
     }
 
     public bool TryUseStamina(float amount)
     {
-        if (currentStamina > 0)
+        if (HasStamina)
         {
             currentStamina = Mathf.Clamp(currentStamina - (amount * Time.deltaTime), 0, maxStamina);
             lastStaminaUseTime = Time.time;
             OnStaminaChanged?.Invoke(StaminaPercentage);
+
+            if (currentStamina <= 0)
+            {
+                IsExhausted = true;
+                OnExhaustionChanged?.Invoke(true);
+            }
+
             return true;
         }
         return false;
@@ -65,6 +74,12 @@ public class PlayerStats : MonoBehaviour
         {
             currentStamina = Mathf.Clamp(currentStamina + (staminaRegenRate * Time.deltaTime), 0, maxStamina);
             OnStaminaChanged?.Invoke(StaminaPercentage);
+
+            if (IsExhausted && currentStamina >= maxStamina * 0.5f)
+            {
+                IsExhausted = false;
+                OnExhaustionChanged?.Invoke(false);
+            }
         }
     }
 }

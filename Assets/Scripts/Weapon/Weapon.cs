@@ -5,7 +5,7 @@ public abstract class Weapon : MonoBehaviour
     public Camera playerCamera;
     [SerializeField] private GameObject impactEffect;
     [SerializeField] private AudioClip impactClip;
-    [SerializeField] private AudioSource impactAudio; // Optional specific source
+    [SerializeField] private AudioSource impactAudio;
 
     public WeaponData weaponData;
     protected float nextFireTime = 0f;
@@ -42,23 +42,18 @@ public abstract class Weapon : MonoBehaviour
     {
         if (playerCamera != null) defaultFov = playerCamera.fieldOfView;
 
-        // Force reset position immediately on start to prevent glitching
         transform.localPosition = defaultPosition;
     }
     protected virtual void Update()
     {
-        // Smooth ADS Logic
         HandleADS();
     }
     private void HandleADS()
     {
-        // 1. Determine Target Position
         Vector3 targetPos = isAiming ? aimPosition : defaultPosition;
 
-        // 2. Smoothly Move Weapon
         transform.localPosition = Vector3.Lerp(transform.localPosition, targetPos, Time.deltaTime * aimSpeed);
 
-        // 3. Smoothly Change FOV
         if (playerCamera != null)
         {
             float targetFov = isAiming ? adsFov : defaultFov;
@@ -69,7 +64,6 @@ public abstract class Weapon : MonoBehaviour
     {
         if (playerCamera == null) return;
 
-        // --- FIX: Use weapon range from data ---
         Ray ray = playerCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0.0f));
         if (Physics.Raycast(ray, out RaycastHit hit, weaponData.range, weaponData.hitLayers))
         {
@@ -90,7 +84,6 @@ public abstract class Weapon : MonoBehaviour
     {
         if (isReloading || ammoCount == weaponData.maxAmmo || reservedAmmo <= 0) return;
 
-        // Play sound
         if (weaponData.reloadClip != null)
             AudioSource.PlayClipAtPoint(weaponData.reloadClip, transform.position);
 
@@ -111,7 +104,6 @@ public abstract class Weapon : MonoBehaviour
         isReloading = false;
         OnReloadStateChanged?.Invoke(false);
 
-        // --- FIX: Call Static Event directly instead of PlayerController instance ---
         PlayerController.OnAmmoCountChanged?.Invoke(ammoCount, reservedAmmo);
     }
 

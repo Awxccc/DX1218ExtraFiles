@@ -14,30 +14,31 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] private float slideStartSpeed = 15f;
     [SerializeField] private float slideEndSpeed = 5f;
     [SerializeField] private float slideFriction = 10f;
+    [SerializeField] private float slideGravity = 20f;
 
     [Header("Crouch Settings")]
     [SerializeField] private float normalHeight = 2f;
     [SerializeField] private float crouchHeight = 1f;
-    [SerializeField] private Vector3 crouchCenter = new Vector3(0, 0.5f, 0);
+    [SerializeField] private Vector3 crouchCenter = new(0, -0.5f, 0);
     [SerializeField] private Vector3 normalCenter = Vector3.zero;
 
     private CharacterController controller;
     private PlayerStats stats;
     private Vector3 velocity;
 
-    // States
     private bool isSliding;
     private bool isCrouching;
     private bool isSprinting;
+
+    private bool requiresCrouchReset;
+
     private float currentSlideSpeed;
     private Vector2 lastInput;
 
-    // Bridge Properties
     public bool IsSprinting => isSprinting;
     public bool IsGrounded => controller.isGrounded;
     public bool IsSliding => isSliding;
-    // Check horizontal velocity only for movement logic
-    public bool IsMoving => lastInput.magnitude > 0.1f && controller.velocity.magnitude > 0.1f;
+    public bool IsMoving => (lastInput.magnitude > 0.1f || isSliding) && controller.velocity.magnitude > 0.1f;
     public Vector3 Velocity => controller.velocity;
 
     private void Awake()
@@ -49,12 +50,21 @@ public class PlayerMovement : MonoBehaviour
 
     public void Move(Vector2 input, bool wantSprint, bool wantCrouch)
     {
-        lastInput = input; // Store for IsMoving check
+        lastInput = input;
+
+
+        if (!wantCrouch)
+        {
+            requiresCrouchReset = false;
+        }
 
         bool canSprint = wantSprint && input.y > 0 && stats.HasStamina;
 
-        // --- SLIDE LOGIC ---
-        if (canSprint && wantCrouch && !isSliding && IsGrounded) StartSlide();
+
+        if (canSprint && wantCrouch && !isSliding && IsGrounded && !requiresCrouchReset)
+        {
+            StartSlide();
+        }
 
         if (isSliding)
         {
@@ -70,16 +80,13 @@ public class PlayerMovement : MonoBehaviour
 
         HandleCrouchPhysics(isCrouching);
 
-        // --- MOVEMENT CALCULATION ---
         float currentSpeed = walkSpeed;
         Vector3 moveDir = Vector3.zero;
 
         if (isSliding)
         {
-            currentSlideSpeed -= slideFriction * Time.deltaTime;
-            if (currentSlideSpeed <= slideEndSpeed) { StopSlide(); currentSpeed = crouchSpeed; }
-            else { currentSpeed = currentSlideSpeed; }
-            moveDir = transform.forward * currentSpeed;
+            HandleSlidingPhysics();
+            moveDir = transform.forward * currentSlideSpeed;
         }
         else
         {
@@ -90,17 +97,41 @@ public class PlayerMovement : MonoBehaviour
             Vector3 right = transform.right * input.x;
             moveDir = (forward + right).normalized * currentSpeed;
 
-            if (isSprinting) stats.TryUseStamina(10f);
+            if (isSprinting && moveDir.magnitude > 0.1f) stats.TryUseStamina(10f);
         }
 
-        // --- GRAVITY ---
-        // Increase downward force to -5f to ensure IsGrounded stays True on slopes
         if (IsGrounded && velocity.y < 0) velocity.y = -5f;
 
         controller.Move(moveDir * Time.deltaTime);
 
         velocity.y += gravity * Time.deltaTime;
         controller.Move(velocity * Time.deltaTime);
+    }
+
+    private void HandleSlidingPhysics()
+    {
+        if (Physics.Raycast(transform.position + Vector3.up * 0.5f, Vector3.down, out RaycastHit hit, 2f))
+        {
+            Vector3 slopeMoveDir = Vector3.ProjectOnPlane(transform.forward, hit.normal).normalized;
+            if (slopeMoveDir.y < -0.1f)
+            {
+                currentSlideSpeed += slideGravity * Time.deltaTime;
+                currentSlideSpeed = Mathf.Clamp(currentSlideSpeed, slideStartSpeed, 30f);
+            }
+            else
+            {
+                currentSlideSpeed -= slideFriction * Time.deltaTime;
+            }
+        }
+        else
+        {
+            currentSlideSpeed -= slideFriction * Time.deltaTime;
+        }
+
+        if (currentSlideSpeed <= slideEndSpeed)
+        {
+            StopSlide();
+        }
     }
 
     public void Jump()
@@ -116,11 +147,14 @@ public class PlayerMovement : MonoBehaviour
     {
         isSliding = true;
         currentSlideSpeed = slideStartSpeed;
+        HandleCrouchPhysics(true);
     }
 
     private void StopSlide()
     {
         isSliding = false;
+
+        requiresCrouchReset = true;
     }
 
     private void HandleCrouchPhysics(bool crouching)

@@ -1,4 +1,5 @@
 public interface IPickUpItem
 {
-    public void Use(PlayerController playerController);
+    void OnInteract();
+    void SetUIVisible(bool isVisible);
 }

@@ -7,6 +7,8 @@ public class UIManager : MonoBehaviour
     [Header("Stats UI")]
     [SerializeField] private Image healthBarFill;
     [SerializeField] private Image staminaBarFill;
+    [SerializeField] private Color normalStaminaColor = new(1f, 0.92f, 0.016f, 1f);
+    [SerializeField] private Color exhaustedStaminaColor = Color.red;
 
     [Header("Weapon UI")]
     [SerializeField] private TMP_Text ammoCountText;
@@ -15,28 +17,27 @@ public class UIManager : MonoBehaviour
     [SerializeField] private Image weaponIconImage;
     [SerializeField] private GameObject crosshairObject;
 
-    // References
     private PlayerStats playerStats;
 
     private void Awake()
     {
-        // Find player stats automatically if only one player exists
         playerStats = FindAnyObjectByType<PlayerStats>();
+
+        if (staminaBarFill != null) staminaBarFill.color = normalStaminaColor;
     }
 
     private void OnEnable()
     {
-        // Subscribe to Player Controller Static Events
         PlayerController.OnAmmoCountChanged += UpdateAmmoText;
         PlayerController.OnWeaponChanged += UpdateWeaponIcon;
         PlayerController.OnADSChanged += UpdateCrosshair;
         Weapon.OnReloadStateChanged += UpdateReloadIndicator;
 
-        // Subscribe to Player Stats Instance Events
         if (playerStats != null)
         {
             playerStats.OnHealthChanged += UpdateHealthBar;
             playerStats.OnStaminaChanged += UpdateStaminaBar;
+            playerStats.OnExhaustionChanged += UpdateStaminaColor;
         }
     }
 
@@ -51,6 +52,7 @@ public class UIManager : MonoBehaviour
         {
             playerStats.OnHealthChanged -= UpdateHealthBar;
             playerStats.OnStaminaChanged -= UpdateStaminaBar;
+            playerStats.OnExhaustionChanged -= UpdateStaminaColor;
         }
     }
 
@@ -64,10 +66,18 @@ public class UIManager : MonoBehaviour
         if (staminaBarFill != null) staminaBarFill.fillAmount = pct;
     }
 
+    private void UpdateStaminaColor(bool isExhausted)
+    {
+        if (staminaBarFill != null)
+        {
+            staminaBarFill.color = isExhausted ? exhaustedStaminaColor : normalStaminaColor;
+        }
+    }
+
     private void UpdateAmmoText(int currentAmmo, int reservedAmmo)
     {
-        ammoCountText.text = currentAmmo.ToString();
-        ammoReservedCountText.text = reservedAmmo.ToString();
+        if (ammoCountText != null) ammoCountText.text = currentAmmo.ToString();
+        if (ammoReservedCountText != null) ammoReservedCountText.text = reservedAmmo.ToString();
     }
 
     private void UpdateReloadIndicator(bool isReloading)

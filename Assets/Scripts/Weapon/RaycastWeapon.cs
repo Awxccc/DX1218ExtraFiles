@@ -1,41 +1,49 @@
 using UnityEngine;
 public class RaycastWeapon : Weapon
 {
-    [SerializeField] private ParticleSystem muzzleFlash;
-    // In RaycastWeapon.cs
+    [SerializeField] private string impactPoolTag = "ImpactNormal";
 
     public override void Shoot()
     {
-        if (CanShoot())
+        if (Time.time < nextFireTime) return;
+        nextFireTime = Time.time + weaponData.fireRate;
+
+        if (ammoCount > 0)
         {
-            if (muzzleFlash != null)
-            {
-                muzzleFlash.Play();
-            }
-
-            if (weaponData != null && weaponData.shootClip != null)
-            {
-                AudioSource.PlayClipAtPoint(weaponData.shootClip, transform.position);
-            }
-
-            nextFireTime = Time.time + weaponData.fireRate;
+            ammoCount--;
+            PlayShootSound();
             PerformRaycast();
-
-            ammoCount -= 1;
         }
         else
         {
-            if (ammoCount <= 0 && !isReloading)
-            {
-                PlayEmptySound();
-            }
+            PlayEmptySound();
         }
     }
 
     public override bool CanShoot()
     {
-        // Use Time.time >= nextFireTime for Fire Rate (Auto-fire)
-        // Use IsPressed() in PlayerController for Hold-to-fire
-        return Time.time >= nextFireTime && ammoCount > 0 && !isReloading;
+        return !isReloading && (ammoCount > 0 || reservedAmmo > 0);
+    }
+
+    private void PlayShootSound()
+    {
+        if (weaponData.shootClip != null)
+            AudioSource.PlayClipAtPoint(weaponData.shootClip, transform.position);
+    }
+
+    new protected void PerformRaycast()
+    {
+        if (playerCamera == null) return;
+
+        Ray ray = playerCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0.0f));
+        if (Physics.Raycast(ray, out RaycastHit hit, weaponData.range, weaponData.hitLayers))
+        {
+            ObjectPoolManager.Instance.SpawnFromPool(impactPoolTag, hit.point, Quaternion.LookRotation(hit.normal));
+
+            if (hit.collider.gameObject.TryGetComponent(out Damageable damageable))
+            {
+                damageable.TakeDamage(weaponData.damage);
+            }
+        }
     }
 }

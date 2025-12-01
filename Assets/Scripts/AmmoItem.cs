@@ -3,10 +3,14 @@ using UnityEngine;
 public class AmmoItem : MonoBehaviour, IPickUpItem
 {
     [SerializeField] private int ammoMultiplier = 1;
-    [SerializeField] private AudioClip pickupSound; // Assign in Inspector
+    [SerializeField] private AudioClip pickupSound;
+    [SerializeField] private GameObject pickupUI;
 
-    public void Use(PlayerController playerController)
+    public void OnInteract()
     {
+        PlayerController playerController = FindAnyObjectByType<PlayerController>();
+        if (playerController == null) return;
+
         Weapon weapon = playerController.CurrentWeapon;
         if (weapon == null) return;
 
@@ -17,5 +21,13 @@ public class AmmoItem : MonoBehaviour, IPickUpItem
 
         if (pickupSound != null)
             AudioSource.PlayClipAtPoint(pickupSound, transform.position);
+
+        Destroy(gameObject);
+    }
+
+    public void SetUIVisible(bool isVisible)
+    {
+        if (pickupUI != null && pickupUI.activeSelf != isVisible)
+            pickupUI.SetActive(isVisible);
     }
 }

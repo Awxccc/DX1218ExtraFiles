@@ -6,7 +6,7 @@ public class PlayerWeaponHandler : MonoBehaviour
     [SerializeField] private Weapon[] weapons;
     [SerializeField] private Transform weaponHolder;
     [SerializeField] private Transform dropPoint;
-    [SerializeField] private AudioClip dropClip; // ASSIGN THIS IN INSPECTOR
+    [SerializeField] private AudioClip dropClip;
 
     [Header("References")]
     [SerializeField] private PlayerCamera playerCamera;
@@ -25,7 +25,7 @@ public class PlayerWeaponHandler : MonoBehaviour
 
     private void InitializeWeapons()
     {
-        foreach (var w in weapons) if (w != null) w.gameObject.SetActive(false);
+        foreach (Weapon w in weapons) if (w != null) w.gameObject.SetActive(false);
         SwitchToNextAvailableWeapon();
     }
 
@@ -46,11 +46,13 @@ public class PlayerWeaponHandler : MonoBehaviour
     public void HandleADS(bool wantAim)
     {
         if (currentWeapon == null) return;
+
         if (isAiming != wantAim)
         {
             isAiming = wantAim;
             PlayerController.OnADSChanged?.Invoke(isAiming);
         }
+        currentWeapon.isAiming = isAiming;
     }
 
     public void HandleReload() { if (currentWeapon != null) currentWeapon.Reload(); }
@@ -61,7 +63,6 @@ public class PlayerWeaponHandler : MonoBehaviour
         int nextIndex = currentWeaponIndex;
         int attempts = 0;
 
-        // Loop until we find a valid weapon or check all slots
         while (attempts < weapons.Length)
         {
             nextIndex += (direction > 0 ? 1 : -1);
@@ -77,8 +78,6 @@ public class PlayerWeaponHandler : MonoBehaviour
         }
     }
 
-    // Inside PlayerWeaponHandler.cs
-
     public void PickupWeapon(WeaponData data, int oldAmmo = -1, int oldReserved = -1)
     {
         if (data == null) return;
@@ -92,11 +91,6 @@ public class PlayerWeaponHandler : MonoBehaviour
 
         GameObject newWeaponObj = Instantiate(data.weaponPrefab, weaponHolder);
 
-        // --- FIX: REMOVED THESE LINES ---
-        // newWeaponObj.transform.localPosition = Vector3.zero;  <-- DELETED
-        // newWeaponObj.transform.localRotation = Quaternion.identity; <-- DELETED
-
-        // Instead, let's reset scale just in case, but keep Pos/Rot from Prefab
         newWeaponObj.transform.localScale = Vector3.one;
 
         Weapon newWeapon = newWeaponObj.GetComponent<Weapon>();
@@ -114,13 +108,11 @@ public class PlayerWeaponHandler : MonoBehaviour
     {
         if (currentWeapon == null) return;
 
-        // 1. Spawn the Pickup
         if (currentWeapon.weaponData.pickupPrefab != null)
         {
             GameObject pickup = Instantiate(currentWeapon.weaponData.pickupPrefab, dropPoint.position, dropPoint.rotation);
 
-            // SAVE AMMO STATE to the pickup
-            if (pickup.TryGetComponent<WeaponPickup>(out var pickupScript))
+            if (pickup.TryGetComponent<WeaponPickup>(out WeaponPickup pickupScript))
             {
                 pickupScript.currentAmmo = currentWeapon.ammoCount;
                 pickupScript.reservedAmmo = currentWeapon.reservedAmmo;
@@ -157,7 +149,6 @@ public class PlayerWeaponHandler : MonoBehaviour
 
     private void SwitchToNextAvailableWeapon()
     {
-        // Logic to find next non-null weapon
         for (int i = 0; i < weapons.Length; i++)
         {
             if (weapons[i] != null) { SwitchToWeapon(i); return; }

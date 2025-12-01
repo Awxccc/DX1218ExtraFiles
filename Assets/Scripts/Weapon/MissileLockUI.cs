@@ -1,70 +1,50 @@
-using TMPro; // If using TextMeshPro, otherwise use UnityEngine.UI for standard Text
 using UnityEngine;
 using UnityEngine.UI;
 
 public class MissileLockUI : MonoBehaviour
 {
-    [SerializeField] private MissileLauncher launcher;
-    [SerializeField] private RectTransform lockReticle; // Assign the UI Image/Panel
-    [SerializeField] private TextMeshProUGUI statusText; // Assign the Text component
-
-    [Header("Visual Settings")]
-    [SerializeField] private Color searchingColor = Color.yellow;
+    [SerializeField] private Image lockIcon;
     [SerializeField] private Color lockedColor = Color.red;
 
-    private Image reticleImage;
+    private PlayerWeaponHandler weaponHandler;
+    private Camera mainCam;
 
     private void Start()
     {
-        if (lockReticle != null)
-        {
-            reticleImage = lockReticle.GetComponent<Image>();
-            lockReticle.gameObject.SetActive(false); // Hide by default
-        }
+        weaponHandler = FindAnyObjectByType<PlayerWeaponHandler>();
+        mainCam = Camera.main;
+
+        if (lockIcon != null) lockIcon.gameObject.SetActive(false);
     }
 
     private void Update()
     {
-        if (launcher == null) return;
+        if (weaponHandler == null || lockIcon == null) return;
 
-        if (launcher.CurrentTarget != null)
+        if (weaponHandler.CurrentWeapon is MissileLauncher launcher)
         {
-            // 1. Show the HUD
-            lockReticle.gameObject.SetActive(true);
+            Transform target = launcher.CurrentTarget;
 
-            // 2. Position HUD over the target in Screen Space
-            Vector3 screenPos = Camera.main.WorldToScreenPoint(launcher.CurrentTarget.position);
-
-            // Check if target is behind us (Z < 0), if so hide reticle
-            if (screenPos.z > 0)
+            if (target != null)
             {
-                lockReticle.position = screenPos;
+                lockIcon.gameObject.SetActive(true);
+                lockIcon.color = lockedColor;
+
+                Vector3 screenPos = mainCam.WorldToScreenPoint(target.position);
+
+                if (screenPos.z > 0)
+                {
+                    lockIcon.transform.position = screenPos;
+                }
             }
             else
             {
-                lockReticle.gameObject.SetActive(false);
-                return;
-            }
-
-            // 3. Update Visuals based on Lock Status
-            if (launcher.IsLocked)
-            {
-                if (reticleImage) reticleImage.color = lockedColor;
-                statusText.text = $"TARGET: {launcher.CurrentTarget.name}\n[ LOCKED ]";
-                statusText.color = lockedColor;
-            }
-            else
-            {
-                if (reticleImage) reticleImage.color = searchingColor;
-                statusText.text = $"TARGET: {launcher.CurrentTarget.name}\n[ AIMING... ]";
-                statusText.color = searchingColor;
+                lockIcon.gameObject.SetActive(false);
             }
         }
         else
         {
-            // No target found, hide UI
-            if (lockReticle.gameObject.activeSelf)
-                lockReticle.gameObject.SetActive(false);
+            lockIcon.gameObject.SetActive(false);
         }
     }
 }

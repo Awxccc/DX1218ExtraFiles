@@ -7,7 +7,7 @@ public class WeaponData : ScriptableObject
     public float damage = 10f;
     public float range = 100f;
     public float fireRate = 0.1f;
-    public int maxAmmo = 30; // Default value recommendation
+    public int maxAmmo = 30;
     public LayerMask hitLayers;
 
     [Header("Weapon Inventory")]
@@ -26,5 +26,5 @@ public class WeaponData : ScriptableObject
     public AudioClip shootClip;
     public AudioClip emptyFireSound;
     public AudioClip equipClip;
-    public AudioClip reloadClip; // <--- ADD THIS LINE
+    public AudioClip reloadClip;
 }

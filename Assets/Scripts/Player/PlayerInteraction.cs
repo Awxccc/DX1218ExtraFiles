@@ -2,29 +2,44 @@ using UnityEngine;
 
 public class PlayerInteraction : MonoBehaviour
 {
-    [SerializeField] private float interactionRange = 3f;
-    [SerializeField] private LayerMask interactableLayer;
-    [SerializeField] private Camera cam;
-    [SerializeField] private PlayerWeaponHandler weaponHandler; // To pass weapons
+    [Header("Settings")]
+    [SerializeField] private float interactionDistance = 3f;
+    [SerializeField] private LayerMask interactionLayer;
+    [SerializeField] private Transform playerCamera;
+
+    private IPickUpItem currentHoveredItem;
+
+    private void Update()
+    {
+        HandleInteractionRaycast();
+    }
 
     public void TryInteract()
     {
-        Ray ray = new(cam.transform.position, cam.transform.forward);
-        if (Physics.Raycast(ray, out RaycastHit hit, interactionRange, interactableLayer))
+        currentHoveredItem?.OnInteract();
+    }
+
+    private void HandleInteractionRaycast()
+    {
+        Ray ray = new(playerCamera.position, playerCamera.forward);
+
+        if (Physics.Raycast(ray, out RaycastHit hit, interactionDistance, interactionLayer))
         {
-            if (hit.collider.TryGetComponent<IPickUpItem>(out var item))
+            if (hit.collider.TryGetComponent(out IPickUpItem item))
             {
-                // We need to bridge the interface. 
-                // Since IPickUpItem expects PlayerController, we pass 'this' 
-                // and let the item handle it, OR we refactor IPickUpItem.
-                // Assuming IPickUpItem.Use(PlayerController pc):
-
-                // Option A: Pass the Controller (requires GetComponent)
-                item.Use(GetComponent<PlayerController>());
-
-                // Destroy item visual
-                Destroy(hit.collider.gameObject);
+                if (currentHoveredItem != item)
+                {
+                    currentHoveredItem?.SetUIVisible(false);
+                    currentHoveredItem = item;
+                    currentHoveredItem.SetUIVisible(true);
+                }
+                return;
             }
+        }
+        if (currentHoveredItem != null)
+        {
+            currentHoveredItem.SetUIVisible(false);
+            currentHoveredItem = null;
         }
     }
 }
